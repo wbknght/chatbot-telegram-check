@@ -41,10 +41,13 @@ export async function POST(req: NextRequest) {
             telegramUserId: null,
         }, ttl);
 
+        // Chatbot.com expects response in 'attributes' format
         return NextResponse.json({
-            token: token,
-            telegram_url: `https://t.me/${env.BOT_USERNAME}?start=${token}`,
-            expires_in: ttl,
+            attributes: {
+                verification_token: token,
+                telegram_url: `https://t.me/${env.BOT_USERNAME}?start=${token}`,
+                expires_in: ttl,
+            }
         });
     } catch (error) {
         console.error("Error in /api/bonus/telegram/start:", error);
