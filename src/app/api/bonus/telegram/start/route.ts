@@ -1,0 +1,37 @@
+import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
+import { env, validateEnv } from "@/lib/env";
+import { setBonusRecord } from "@/lib/kv";
+
+export async function POST(req: NextRequest) {
+    try {
+        validateEnv();
+
+        const authHeader = req.headers.get("x-livechat-token") || req.headers.get("verification-token");
+
+        if (authHeader !== env.LIVECHAT_WEBHOOK_TOKEN) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const token = randomBytes(16).toString("hex"); // 32 chars
+        const now = Math.floor(Date.now() / 1000);
+        const ttl = 600;
+        const expiresAt = now + ttl;
+
+        await setBonusRecord(token, {
+            verified: false,
+            createdAt: now,
+            expiresAt: expiresAt,
+            telegramUserId: null,
+        }, ttl);
+
+        return NextResponse.json({
+            token: token,
+            telegram_url: `https://t.me/${env.BOT_USERNAME}?start=${token}`,
+            expires_in: ttl,
+        });
+    } catch (error) {
+        console.error("Error in /api/bonus/telegram/start:", error);
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    }
+}
