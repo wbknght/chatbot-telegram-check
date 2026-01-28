@@ -3,6 +3,22 @@ import { randomBytes } from "crypto";
 import { env, validateEnv } from "@/lib/env";
 import { setBonusRecord } from "@/lib/kv";
 
+// GET handler for Livechat webhook validation
+export async function GET(req: NextRequest) {
+    const { searchParams } = new URL(req.url);
+    const challenge = searchParams.get("challenge");
+
+    if (challenge) {
+        // Echo back the challenge for webhook validation
+        return new NextResponse(challenge, {
+            status: 200,
+            headers: { "Content-Type": "text/plain" },
+        });
+    }
+
+    return NextResponse.json({ status: "ok" });
+}
+
 export async function POST(req: NextRequest) {
     try {
         validateEnv();
