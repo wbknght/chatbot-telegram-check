@@ -3,37 +3,50 @@ import { getBonusRecord } from "@/lib/kv";
 import { env, validateEnv } from "@/lib/env";
 
 // ChatBot.com sends verification token as query param: ?token=YOUR_TOKEN
-function verifyToken(req: NextRequest): boolean {
+function verifyWebhookToken(req: NextRequest): boolean {
     const { searchParams } = new URL(req.url);
     const receivedToken = searchParams.get("token");
-
-    // Check the 'auth' param for ChatBot.com webhook authentication
-    const authToken = searchParams.get("auth");
 
     // If no LIVECHAT_WEBHOOK_TOKEN is set, skip verification
     if (!env.LIVECHAT_WEBHOOK_TOKEN) {
         return true;
     }
 
-    return authToken === env.LIVECHAT_WEBHOOK_TOKEN;
+    return receivedToken === env.LIVECHAT_WEBHOOK_TOKEN;
 }
 
-// GET handler for status check
+// GET handler for ChatBot.com webhook validation AND status checks
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
-        const token = searchParams.get("token");
+        const challenge = searchParams.get("challenge");
+        const bonusCode = searchParams.get("bonus_code");
 
-        if (!token) {
+        // If challenge is present, this is a ChatBot.com validation request
+        if (challenge) {
+            // Verify the webhook token
+            if (!verifyWebhookToken(req)) {
+                return new NextResponse("Unauthorized", { status: 401 });
+            }
+            // Return the challenge as plain text
+            return new NextResponse(challenge, {
+                status: 200,
+                headers: { "Content-Type": "text/plain" },
+            });
+        }
+
+        // Otherwise, this is a status check request
+        // The bonus_code can come from query param
+        if (!bonusCode) {
             return NextResponse.json({
                 attributes: {
                     verified: "false",
-                    error: "Token required"
+                    error: "bonus_code required"
                 }
-            }, { status: 400 });
+            });
         }
 
-        const record = await getBonusRecord(token);
+        const record = await getBonusRecord(bonusCode);
 
         if (!record) {
             return NextResponse.json({
@@ -54,7 +67,6 @@ export async function GET(req: NextRequest) {
             });
         }
 
-        // ChatBot.com format - return as attributes
         return NextResponse.json({
             attributes: {
                 verified: record.verified ? "true" : "false",
@@ -62,7 +74,7 @@ export async function GET(req: NextRequest) {
             }
         });
     } catch (error) {
-        console.error("Error in /api/bonus/telegram/status:", error);
+        console.error("Error in /api/bonus/telegram/status GET:", error);
         return NextResponse.json({
             attributes: {
                 verified: "false",
@@ -77,17 +89,25 @@ export async function POST(req: NextRequest) {
     try {
         validateEnv();
 
-        // Verify the auth token from query params
-        if (!verifyToken(req)) {
+        // Verify the webhook token from query params
+        if (!verifyWebhookToken(req)) {
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
         // Get the bonus_code from request body (ChatBot.com sends attributes)
         const body = await req.json().catch(() => ({}));
-        const token = body.attributes?.bonus_code;
+        console.log("Status webhook received body:", JSON.stringify(body));
 
-        if (!token) {
+        const bonusCode = body.attributes?.bonus_code;
+
+        if (!bonusCode) {
             return NextResponse.json({
+                responses: [
+                    {
+                        type: "text",
+                        message: "❌ Error: Could not find your verification code. Please start over."
+                    }
+                ],
                 attributes: {
                     verified: "false",
                     error: "bonus_code not provided"
@@ -95,10 +115,16 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        const record = await getBonusRecord(token);
+        const record = await getBonusRecord(bonusCode);
 
         if (!record) {
             return NextResponse.json({
+                responses: [
+                    {
+                        type: "text",
+                        message: "❌ Verification code not found. Please request a new link."
+                    }
+                ],
                 attributes: {
                     verified: "false",
                     status: "not_found"
@@ -109,6 +135,12 @@ export async function POST(req: NextRequest) {
         const now = Math.floor(Date.now() / 1000);
         if (record.expiresAt < now) {
             return NextResponse.json({
+                responses: [
+                    {
+                        type: "text",
+                        message: "❌ Your verification link has expired. Please request a new one."
+                    }
+                ],
                 attributes: {
                     verified: "false",
                     status: "expired"
@@ -145,8 +177,14 @@ export async function POST(req: NextRequest) {
             });
         }
     } catch (error) {
-        console.error("Error in /api/bonus/telegram/status:", error);
+        console.error("Error in /api/bonus/telegram/status POST:", error);
         return NextResponse.json({
+            responses: [
+                {
+                    type: "text",
+                    message: "❌ An error occurred. Please try again."
+                }
+            ],
             attributes: {
                 verified: "false",
                 error: "Internal Server Error"
