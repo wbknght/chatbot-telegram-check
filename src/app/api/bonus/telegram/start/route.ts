@@ -41,12 +41,15 @@ export async function POST(req: NextRequest) {
             telegramUserId: null,
         }, ttl);
 
-        // Chatbot.com expects response in 'attributes' format
+        const telegramUrl = `https://t.me/${env.BOT_USERNAME}?start=${token}`;
+
+        // ChatBot.com webhook response format
+        // Returns attributes that can be used in the chatbot flow
         return NextResponse.json({
             attributes: {
-                verification_token: token,
-                telegram_url: `https://t.me/${env.BOT_USERNAME}?start=${token}`,
-                expires_in: ttl,
+                bonus_code: token,
+                telegram_link: telegramUrl,
+                expires_in: String(ttl),
             }
         });
     } catch (error) {
