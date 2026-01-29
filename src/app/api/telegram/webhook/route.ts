@@ -68,16 +68,18 @@ export async function POST(req: NextRequest) {
                         text: "✅ Verification successful.\nReturn to Livechat to claim your bonus.",
                     });
                 } else {
+                    // Build inline keyboard - only add Join Channel if username is set
+                    const buttons = [];
+                    if (env.CHANNEL_USERNAME) {
+                        buttons.push({ text: "Join Channel", url: `https://t.me/${env.CHANNEL_USERNAME}` });
+                    }
+                    buttons.push({ text: "Re-check", callback_data: `recheck:${token}` });
+
                     await tg("sendMessage", {
                         chat_id: message.chat.id,
                         text: "❌ You are not following our Telegram channel.\nPlease join and tap Re-check.",
                         reply_markup: {
-                            inline_keyboard: [
-                                [
-                                    { text: "Join Channel", url: `https://t.me/${env.CHANNEL_ID.replace("-100", "")}` }, // Attempt to make a link if it's a public channel ID style, otherwise user should already have it. 
-                                    { text: "Re-check", callback_data: `recheck:${token}` }
-                                ]
-                            ]
+                            inline_keyboard: [buttons]
                         }
                     });
                 }

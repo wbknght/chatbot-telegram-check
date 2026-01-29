@@ -8,8 +8,16 @@ function verifyToken(req: NextRequest): boolean {
     const { searchParams } = new URL(req.url);
     const receivedToken = searchParams.get("token");
 
+    // Log for debugging
+    console.log("Token verification:", {
+        received: receivedToken,
+        expected: env.LIVECHAT_WEBHOOK_TOKEN ? "[set]" : "[not set]",
+        match: receivedToken === env.LIVECHAT_WEBHOOK_TOKEN
+    });
+
     // If no LIVECHAT_WEBHOOK_TOKEN is set, skip verification (for testing)
     if (!env.LIVECHAT_WEBHOOK_TOKEN) {
+        console.log("LIVECHAT_WEBHOOK_TOKEN not set, skipping verification");
         return true;
     }
 
